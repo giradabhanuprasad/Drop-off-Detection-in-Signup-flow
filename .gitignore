@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.DS_Store
+dummy.png
+dummy_image.png
+dummy_screenshot.png
