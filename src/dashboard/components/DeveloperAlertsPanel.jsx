@@ -1,15 +1,27 @@
 import React, { useState } from 'react';
 import { CodePatchRenderer } from './CodePatchRenderer';
+import { SessionReplayModal } from './SessionReplayModal';
 
 export const DeveloperAlertsPanel = ({ alerts, insights, onMarkRead }) => {
   const [expandedAlertId, setExpandedAlertId] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('All Drop Points');
+  const [replayAlert, setReplayAlert] = useState(null);
 
   const toggleExpand = (id) => {
     setExpandedAlertId(expandedAlertId === id ? null : id);
   };
 
+  const filteredAlerts = alerts.filter(alert => {
+    if (activeFilter === 'All Drop Points') return true;
+    if (activeFilter === 'Critical') return alert.type === 'critical' || alert.message.toLowerCase().includes('critical');
+    if (activeFilter === 'Warning') return alert.type === 'warning' || alert.message.toLowerCase().includes('warning');
+    if (activeFilter === 'Technical Error') return alert.type === 'technical' || alert.message.toLowerCase().includes('error');
+    return true;
+  });
+
   return (
     <div className="animate-fade-in" style={{ paddingBottom: 40 }}>
+      {/* existing headers and summary cards remain unchanged */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <h1 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -52,17 +64,29 @@ export const DeveloperAlertsPanel = ({ alerts, insights, onMarkRead }) => {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, overflowX: 'auto', paddingBottom: 8 }}>
-         <button className="secondary-button" style={{ background: 'var(--accent-primary)', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: 20, fontSize: 13 }}>All Drop Points</button>
-         <button className="secondary-button" style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13 }}>Critical</button>
-         <button className="secondary-button" style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13 }}>Warning</button>
-         <button className="secondary-button" style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13 }}>Technical Error</button>
+         {['All Drop Points', 'Critical', 'Warning', 'Technical Error'].map(filter => (
+           <button 
+             key={filter}
+             onClick={() => setActiveFilter(filter)}
+             className="secondary-button" 
+             style={{ 
+               background: activeFilter === filter ? 'var(--accent-primary)' : 'transparent', 
+               color: activeFilter === filter ? '#fff' : 'inherit', 
+               border: activeFilter === filter ? 'none' : undefined, 
+               padding: '6px 16px', 
+               borderRadius: 20, 
+               fontSize: 13 
+             }}>
+             {filter}
+           </button>
+         ))}
       </div>
 
-      {alerts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>No active drops detected. You are running smoothly!</div>
+      {filteredAlerts.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>No active drops detected for this filter. You are running smoothly!</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {alerts.map(alert => {
+          {filteredAlerts.map(alert => {
             const insight = insights.find(i => i.id === alert.insightId);
             const isExpanded = expandedAlertId === alert.id;
 
@@ -118,6 +142,9 @@ export const DeveloperAlertsPanel = ({ alerts, insights, onMarkRead }) => {
                          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{usersLost}</div>
                          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>users lost</div>
                       </div>
+                      <button className="secondary-button" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(92,111,255,0.1)', color: 'var(--accent-primary)', border: '1px solid rgba(92,111,255,0.3)' }} onClick={(e) => { e.stopPropagation(); setReplayAlert(alert); }}>
+                         ▶ Replay
+                      </button>
                       <button className="secondary-button" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' }} onClick={(e) => { e.stopPropagation(); toggleExpand(alert.id); }}>
                          <span style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>➔</span> Fix
                       </button>
@@ -219,6 +246,13 @@ export const DeveloperAlertsPanel = ({ alerts, insights, onMarkRead }) => {
           })}
         </div>
       )}
+
+      {/* Rendering the Session Replay Simulator mapped to the selected alert */}
+      <SessionReplayModal 
+        isOpen={!!replayAlert} 
+        alert={replayAlert || {}} 
+        onClose={() => setReplayAlert(null)} 
+      />
     </div>
   );
 };

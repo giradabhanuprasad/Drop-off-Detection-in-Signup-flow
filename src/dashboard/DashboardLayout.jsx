@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { mockApi } from '../services/mockApi';
 import { Sidebar } from './components/Sidebar';
 import PlatformOverview from './components/PlatformOverview';
@@ -10,9 +10,34 @@ import { PsychologyInsightsPanel } from './components/PsychologyInsightsPanel';
 import { DeviceBreakdownPanel } from './components/DeviceBreakdownPanel';
 import { AlertConfigurationPanel } from './components/AlertConfigurationPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ABTestingPanel } from './components/ABTestingPanel';
+import { SettingsHub } from './components/SettingsHub';
 
 const DashboardLayout = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    
+    // Default to 'overview' unless a valid tab is in the URL
+    const tabFromUrl = searchParams.get('tab') || 'overview';
+    const [activeNav, setActiveNav] = useState(tabFromUrl);
+
+    // Sync state to URL without full navigation
+    const handleNavChange = (newNav) => {
+        setActiveNav(newNav);
+        if (newNav === 'overview') {
+            setSearchParams({});
+        } else {
+            setSearchParams({ tab: newNav });
+        }
+    };
+
+    // If the URL changes (e.g. from PlatformOverview Quick Actions), update the state
+    useEffect(() => {
+        if (tabFromUrl !== activeNav) {
+            setActiveNav(tabFromUrl);
+        }
+    }, [tabFromUrl]);
+
     const [metrics, setMetrics] = useState({});
     const [alerts, setAlerts] = useState([]);
     const [insights, setInsights] = useState([]);
@@ -20,7 +45,6 @@ const DashboardLayout = () => {
     const [flows, setFlows] = useState({});
     const [selectedStep, setSelectedStep] = useState(null);
     const [selectedFlowFilter, setSelectedFlowFilter] = useState(null);
-    const [activeNav, setActiveNav] = useState('overview');
 
     useEffect(() => {
         const unsubscribe = mockApi.subscribe(({ metrics, alerts, insights, rules, flows }) => {
@@ -49,14 +73,14 @@ const DashboardLayout = () => {
 
     return (
         <div className="app-container" style={{ background: 'var(--bg-app)', display: 'flex', overflow: 'hidden', height: '100vh' }}>
-            <Sidebar activeNav={activeNav} setActiveNav={setActiveNav} />
+            <Sidebar activeNav={activeNav} setActiveNav={handleNavChange} />
 
             <div style={{ overflowY: 'auto', flex: 1, padding: '40px 48px' }}>
 
                 {/* 1. PLATFORM OVERVIEW */}
                 {activeNav === 'overview' && (
                     <ErrorBoundary name="Platform Overview">
-                        <PlatformOverview metrics={metrics} flows={flows} alerts={alerts} />
+                        <PlatformOverview stepMetrics={metrics} alerts={alerts} insights={insights} flows={flows} />
                     </ErrorBoundary>
                 )}
 
@@ -143,6 +167,13 @@ const DashboardLayout = () => {
                     </ErrorBoundary>
                 )}
 
+                {/* A/B TESTING */}
+                {activeNav === 'ab_testing' && (
+                    <ErrorBoundary name="A/B Testing">
+                        <ABTestingPanel metrics={metrics} flows={flows} />
+                    </ErrorBoundary>
+                )}
+
                 {/* 4. ALERT CONFIGURATION */}
                 {activeNav === 'alerts' && (
                     <div className="animate-fade-in">
@@ -153,6 +184,17 @@ const DashboardLayout = () => {
                         <ErrorBoundary name="Alert Configuration">
                             <AlertConfigurationPanel rules={rules} />
                         </ErrorBoundary>
+                    </div>
+                )}
+
+                {/* 5. SETTINGS */}
+                {activeNav === 'settings' && (
+                    <div className="animate-fade-in">
+                        <div style={{ marginBottom: 32 }}>
+                            <h1 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', margin: '0 0 8px 0' }}>Settings</h1>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: 15, margin: 0 }}>Manage your account, team members, and integration preferences.</p>
+                        </div>
+                        <SettingsHub />
                     </div>
                 )}
             </div>

@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -46,35 +48,42 @@ const flowDefinitions = {
     }
 };
 
-// Seed random metrics for all these huge funnels
+const DATA_FILE = path.join(__dirname, 'data.json');
 let metrics = {};
-Object.entries(flowDefinitions).forEach(([flowId, flow]) => {
-    let baseEntered = Math.floor(Math.random() * 5000) + 1000;
-    flow.steps.forEach((stepId, index) => {
-        // Compound drop off so it looks somewhat realistic
-        const dropRate = Math.random() * 0.2 + 0.05; // 5% to 25% drop per step
-        const dropped = Math.floor(baseEntered * dropRate);
-        const completed = baseEntered - dropped;
-        
-        metrics[stepId] = {
-            entered: baseEntered,
-            completed: completed,
-            dropped: dropped,
-            avgTime: Math.floor(Math.random() * 60) + 10,
-            errors: Math.floor(Math.random() * 200),
-            name: stepId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-            rageClicks: Math.floor(Math.random() * 100),
-            hesitation: Math.floor(Math.random() * 400),
-            tabSwitches: Math.floor(Math.random() * 200),
-            backButtons: Math.floor(Math.random() * 50)
-        };
-        baseEntered = completed; // Next step starts with what completed this step
-    });
-});
+let alertRules = [{ id: 'rule1', name: 'Critical Drop-off Rule', threshold: 15, channel: 'Slack', webhookUrl: '', enabled: true }];
 
-let alertRules = [
-    { id: 'rule1', name: 'Critical Drop-off Rule', threshold: 15, channel: 'Slack', enabled: true }
-];
+if (fs.existsSync(DATA_FILE)) {
+    try {
+        const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        events = data.events || [];
+        alerts = data.alerts || [];
+        insights = data.insights || [];
+        metrics = data.metrics || {};
+        if (data.alertRules) alertRules = data.alertRules;
+    } catch (e) {
+        console.error('Failed to load data.json', e);
+    }
+} else {
+    // Seed random metrics for first run
+    Object.entries(flowDefinitions).forEach(([flowId, flow]) => {
+        let baseEntered = Math.floor(Math.random() * 5000) + 1000;
+        flow.steps.forEach((stepId) => {
+            const dropRate = Math.random() * 0.2 + 0.05;
+            const dropped = Math.floor(baseEntered * dropRate);
+            const completed = baseEntered - dropped;
+            metrics[stepId] = {
+                entered: baseEntered, completed, dropped,
+                avgTime: Math.floor(Math.random() * 60) + 10, errors: Math.floor(Math.random() * 200),
+                name: stepId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+                rageClicks: Math.floor(Math.random() * 100), hesitation: Math.floor(Math.random() * 400),
+                tabSwitches: Math.floor(Math.random() * 200), backButtons: Math.floor(Math.random() * 50)
+            };
+            baseEntered = completed;
+        });
+    });
+}
+
+const saveData = () => fs.writeFileSync(DATA_FILE, JSON.stringify({ events, alerts, insights, metrics, alertRules }, null, 2));
 
 // Precision Code Fix Matrix: keyed by [stepId][reasonCategory]
 // Each fix is EXACT and SPECIFIC to the friction at that step for that reason
@@ -1073,6 +1082,20 @@ function generateDropOffInsightAndAlert(event) {
             read: false
         };
         alerts.unshift(newAlert);
+        saveData();
+
+        // Webhook Live Execution
+        if (rule && rule.webhookUrl && rule.webhookUrl.startsWith('http')) {
+            const payload = {
+                text: `*🚨 SignalFlow Alert: Drop-off Spiked at ${stepId}*\n*Cause:* ${enrichedCause}\n*Rate:* ${checkDropRate.toFixed(1)}%\nFix this in the SignalFlow Dashboard.`,
+                alertId: newAlert.id
+            };
+            fetch(rule.webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(e => console.error("Webhook trigger failed:", e.message));
+        }
     }
 }
 
@@ -1106,7 +1129,65 @@ app.post('/api/v1/events', (req, res) => {
       if (event.type === 'tab_switch') metrics[event.step].tabSwitches += 1;
     });
 
+    saveData();
     res.status(202).json({ status: 'queued', count: batch.length });
+});
+
+// NEW: Live User Exception Endpoint
+app.post('/api/v1/user-exceptions', (req, res) => {
+    const { email, reason, context } = req.body;
+    
+    const newInsight = {
+        id: uuidv4(),
+        stepId: context || 'Unknown Context',
+        reasonCategory: 'live_user_exception',
+        userTypedReason: reason,
+        categoryLabel: 'Exception Tracking',
+        hasScreenshot: false,
+        screenshotBase64: null,
+        resolvedIntentCategory: 'critical_failure',
+        title: `Live Exception: ${email}`,
+        problem: `Individual User Failure: ${email}`,
+        cause: `[Direct User Exception Alert] Output: "${reason}"`,
+        evidence: `Direct API execution triggered by exact individual user failure in ${context}.`,
+        recommendation: {
+            action: 'Check logs and contact user directly regarding failure.',
+            impact_prediction: 'High - Individual customer blockage.',
+            generatedCode: '// User Exception Traced.\n// console.log("Individual error intercepted.");',
+            userContext: reason,
+            imageAttached: false
+        },
+        timestamp: Date.now()
+    };
+    insights.unshift(newInsight);
+
+    const newAlert = {
+        id: uuidv4(),
+        type: 'critical',
+        message: `🚨 Live User Exception: ${email}`,
+        details: reason,
+        insightId: newInsight.id,
+        timestamp: Date.now(),
+        read: false
+    };
+    alerts.unshift(newAlert);
+    saveData();
+
+    // Trigger webhook immediately if enabled
+    const rule = alertRules.find(r => r.enabled);
+    if (rule && rule.webhookUrl && rule.webhookUrl.startsWith('http')) {
+        const payload = {
+            text: `*🚨 SignalFlow Exception: ${email}*\n*Context:* ${context}\n*Failure Reason:* ${reason}\nFix this in the SignalFlow Dashboard.`,
+            alertId: newAlert.id
+        };
+        fetch(rule.webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(e => console.error("Webhook trigger failed:", e.message));
+    }
+
+    res.json({ status: 'success', alertId: newAlert.id });
 });
 
 app.get('/api/v1/metrics', (req, res) => res.json(metrics));
@@ -1117,12 +1198,14 @@ app.get('/api/v1/flows', (req, res) => res.json(flowDefinitions));
 
 app.post('/api/v1/rules', (req, res) => {
     alertRules = req.body.rules;
+    saveData();
     res.json({ status: 'success' });
 });
 
 app.post('/api/v1/alerts/:id/read', (req, res) => {
     const alert = alerts.find(a => a.id === req.params.id);
     if (alert) alert.read = true;
+    saveData();
     res.json({ status: 'success' });
 });
 

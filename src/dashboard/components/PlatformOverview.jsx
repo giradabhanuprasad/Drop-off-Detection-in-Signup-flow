@@ -1,9 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // ─── Stat Card ─────────────────────────────────────────────────────────────
-const StatCard = ({ label, value, sub, icon, color, trend }) => (
-  <div className="glass-panel" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 8, borderColor: `${color}22` }}>
+const StatCard = ({ label, value, sub, icon, color, trend, onClick }) => (
+  <div 
+    className="glass-panel cursor-pointer hover:border-indigo-500/50 transition-all duration-200" 
+    onClick={onClick}
+    style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 8, borderColor: `${color}22`, cursor: onClick ? 'pointer' : 'default', transition: 'all 0.2s', ':hover': onClick ? { transform: 'translateY(-2px)' } : {} }}
+    onMouseOver={(e) => { if(onClick) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = color; } }}
+    onMouseOut={(e) => { if(onClick) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = `${color}22`; } }}
+  >
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
       <span style={{ fontSize: 28 }}>{icon}</span>
       {trend && (
@@ -101,52 +107,103 @@ const LiveFeedPanel = ({ alerts }) => {
 };
 
 // ─── Quick Actions ──────────────────────────────────────────────────────────
-const QuickActions = ({ navigate }) => (
-  <div className="glass-panel" style={{ padding: 28 }}>
-    <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>⚡ Quick Actions</h3>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {[
-        { icon: '🧪', label: 'Run a New Simulation', sub: 'Test one of 8 industry sign-up flows', path: '/signup', color: '#6366f1' },
-        { icon: '📊', label: 'View Funnel Analysis', sub: 'Deep-dive into step-level drop-off', path: null, tab: 'funnels', color: '#38bdf8' },
-        { icon: '🔍', label: 'Inspect Drop-offs', sub: 'Review AI root-cause findings', path: null, tab: 'drop_analysis', color: '#ef4444' },
-        { icon: '🔔', label: 'Check Alerts', sub: 'See all active critical warnings', path: null, tab: 'alerts', color: '#f59e0b' },
-      ].map(action => (
-        <button
-          key={action.label}
-          onClick={() => action.path ? navigate(action.path) : navigate(`/dashboard?tab=${action.tab}`)}
-          style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-              background: `${action.color}08`, border: `1px solid ${action.color}22`,
-              borderRadius: 12, cursor: 'pointer', textAlign: 'left', width: '100%',
-              transition: 'all 0.2s', fontFamily: 'var(--font-sans)' }}
-          onMouseOver={e => { e.currentTarget.style.background = `${action.color}14`; e.currentTarget.style.borderColor = `${action.color}55`; }}
-          onMouseOut={e => { e.currentTarget.style.background = `${action.color}08`; e.currentTarget.style.borderColor = `${action.color}22`; }}
-        >
-          <span style={{ fontSize: 22, flexShrink: 0 }}>{action.icon}</span>
-          <div>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#fff' }}>{action.label}</p>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{action.sub}</p>
-          </div>
-          <span style={{ marginLeft: 'auto', color: action.color, fontSize: 18 }}>→</span>
-        </button>
-      ))}
+const QuickActions = ({ navigate }) => {
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  const triggerLiveSimulation = async () => {
+    setIsSimulating(true);
+    const mockSteps = ['email', 'otp', 'profile', 'payment'];
+    const fakeEvents = [];
+    
+    // Simulate 50 new people doing interactions
+    for (let i = 0; i < 50; i++) {
+        let step = mockSteps[Math.floor(Math.random() * mockSteps.length)];
+        fakeEvents.push({ step, type: 'page_view' });
+        
+        if (Math.random() > 0.5) fakeEvents.push({ step, type: 'step_complete' });
+        else {
+            fakeEvents.push({ step, type: 'explicit_dropoff', properties: { reasonCategory: 'confusion', userTypedReason: 'I am confused by this form.' } });
+            if (Math.random() > 0.5) fakeEvents.push({ step, type: 'rage_click' });
+            if (Math.random() > 0.5) fakeEvents.push({ step, type: 'validation_error' });
+        }
+    }
+
+    try {
+        await fetch('http://localhost:3001/api/v1/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ events: fakeEvents })
+        });
+        setTimeout(() => setIsSimulating(false), 800);
+    } catch(e) {
+        console.error("Simulation failed", e);
+        setIsSimulating(false);
+    }
+  };
+
+  return (
+    <div className="glass-panel" style={{ padding: 28 }}>
+      <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>⚡ Quick Actions</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {[
+          { icon: '🧪', label: isSimulating ? 'Simulating Traffic...' : 'Run a New Simulation', sub: 'Inject 50 randomized user sessions to backend', action: triggerLiveSimulation, color: '#6366f1' },
+          { icon: '📊', label: 'View Funnel Analysis', sub: 'Deep-dive into step-level drop-off', path: null, tab: 'funnels', color: '#38bdf8' },
+          { icon: '🔍', label: 'Inspect Drop-offs', sub: 'Review AI root-cause findings', path: null, tab: 'drop_analysis', color: '#ef4444' },
+          { icon: '🔔', label: 'Check Alerts', sub: 'See all active critical warnings', path: null, tab: 'alerts', color: '#f59e0b' },
+        ].map(action => (
+          <button
+            key={action.label}
+            onClick={() => action.action ? action.action() : action.path ? navigate(action.path) : navigate(`/dashboard?tab=${action.tab}`)}
+            disabled={isSimulating && action.icon === '🧪'}
+            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                background: `${action.color}08`, border: `1px solid ${action.color}22`,
+                borderRadius: 12, cursor: (isSimulating && action.icon === '🧪') ? 'wait' : 'pointer', textAlign: 'left', width: '100%',
+                transition: 'all 0.2s', fontFamily: 'var(--font-sans)', opacity: (isSimulating && action.icon === '🧪') ? 0.6 : 1 }}
+            onMouseOver={e => { if (!(isSimulating && action.icon === '🧪')) { e.currentTarget.style.background = `${action.color}14`; e.currentTarget.style.borderColor = `${action.color}55`; } }}
+            onMouseOut={e => { if (!(isSimulating && action.icon === '🧪')) { e.currentTarget.style.background = `${action.color}08`; e.currentTarget.style.borderColor = `${action.color}22`; } }}
+          >
+            <span style={{ fontSize: 22, flexShrink: 0 }}>{action.icon}</span>
+            <div>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#fff' }}>{action.label}</p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{action.sub}</p>
+            </div>
+            <span style={{ marginLeft: 'auto', color: action.color, fontSize: 18 }}>→</span>
+          </button>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
-const PlatformOverview = ({ stepMetrics, alerts, insights }) => {
+const PlatformOverview = ({ stepMetrics, alerts, insights, flows }) => {
   const navigate = useNavigate();
 
   // Compute aggregate KPIs
   const kpis = useMemo(() => {
-    if (!stepMetrics) return { totalEntered: 0, totalDropped: 0, avgDropRate: 0, criticalSteps: 0 };
-    const entries = Object.values(stepMetrics);
-    const totalEntered = entries.reduce((s, m) => s + m.entered, 0);
-    const totalDropped = entries.reduce((s, m) => s + m.dropped, 0);
-    const avgDropRate = entries.length ? Math.round(entries.reduce((s, m) => s + (m.entered > 0 ? (m.dropped / m.entered) * 100 : 0), 0) / entries.length) : 0;
-    const criticalSteps = entries.filter(m => m.entered > 0 && (m.dropped / m.entered) * 100 > 20).length;
+    if (!stepMetrics || !flows) return { totalEntered: 0, totalDropped: 0, avgDropRate: 0, criticalSteps: 0 };
+    
+    // Find all step IDs that are NOT the first step in any flow
+    const nonRootSteps = new Set();
+    Object.values(flows).forEach(f => {
+      if (f.steps && f.steps.length > 1) {
+        f.steps.slice(1).forEach(s => nonRootSteps.add(s));
+      }
+    });
+
+    const entries = Object.entries(stepMetrics);
+    
+    // Total users is sum of entered at root steps ONLY to prevent double-counting
+    const totalEntered = entries.reduce((s, [id, m]) => {
+      return nonRootSteps.has(id) ? s : s + (m.entered || 0);
+    }, 0);
+
+    const totalDropped = entries.reduce((s, [id, m]) => s + (m.dropped || 0), 0);
+    const avgDropRate = entries.length ? Math.round(entries.reduce((s, [id, m]) => s + (m.entered > 0 ? (m.dropped / m.entered) * 100 : 0), 0) / entries.length) : 0;
+    const criticalSteps = entries.filter(([id, m]) => m.entered > 0 && (m.dropped / m.entered) * 100 > 20).length;
+    
     return { totalEntered, totalDropped, avgDropRate, criticalSteps };
-  }, [stepMetrics]);
+  }, [stepMetrics, flows]);
 
   const overallConversion = kpis.totalEntered > 0
     ? Math.round(((kpis.totalEntered - kpis.totalDropped) / kpis.totalEntered) * 100)
@@ -164,12 +221,12 @@ const PlatformOverview = ({ stepMetrics, alerts, insights }) => {
 
       {/* KPI Summary Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, marginBottom: 28 }}>
-        <StatCard icon="👥" label="Total Users Tracked" value={kpis.totalEntered.toLocaleString()} sub="All simulated funnel entries" color="#6366f1" trend={7} />
-        <StatCard icon="🚪" label="Users Dropped Off" value={kpis.totalDropped.toLocaleString()} sub="Abandoned before completing" color="#ef4444" trend={-12} />
-        <StatCard icon="✅" label="Overall Conversion" value={`${overallConversion}%`} sub="Users who reached the final step" color="#22c55e" trend={3} />
-        <StatCard icon="⚠️" label="Critical Drop Points" value={kpis.criticalSteps} sub="Steps with >20% drop rate" color="#f59e0b" />
-        <StatCard icon="📋" label="Open AI Insights" value={(insights || []).length} sub="Pending code fixes to review" color="#38bdf8" />
-        <StatCard icon="🔔" label="Active Alerts" value={(alerts || []).filter(a => !a.read).length} sub="Unread critical notifications" color="#a855f7" />
+        <StatCard icon="👥" label="Total Users Tracked" value={kpis.totalEntered.toLocaleString()} sub="All simulated funnel entries" color="#6366f1" trend={7} onClick={() => navigate('/dashboard?tab=funnels')}  />
+        <StatCard icon="🚪" label="Users Dropped Off" value={kpis.totalDropped.toLocaleString()} sub="Abandoned before completing" color="#ef4444" trend={-12} onClick={() => navigate('/dashboard?tab=funnels')} />
+        <StatCard icon="✅" label="Overall Conversion" value={`${overallConversion}%`} sub="Users who reached the final step" color="#22c55e" trend={3} onClick={() => navigate('/dashboard?tab=funnels')} />
+        <StatCard icon="⚠️" label="Critical Drop Points" value={kpis.criticalSteps} sub="Steps with >20% drop rate" color="#f59e0b" onClick={() => navigate('/dashboard?tab=funnels')} />
+        <StatCard icon="📋" label="Open AI Insights" value={(insights || []).length} sub="Pending code fixes to review" color="#38bdf8" onClick={() => navigate('/dashboard?tab=drop_analysis')} />
+        <StatCard icon="🔔" label="Active Alerts" value={(alerts || []).filter(a => !a.read).length} sub="Unread critical notifications" color="#a855f7" onClick={() => navigate('/dashboard?tab=alerts')} />
       </div>
 
       {/* Main Content Grid */}

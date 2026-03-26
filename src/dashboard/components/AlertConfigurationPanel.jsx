@@ -17,7 +17,12 @@ export const AlertConfigurationPanel = ({ rules }) => {
   const handleThresholdChange = (id, newThreshold) => {
     const updated = localRules.map(r => r.id === id ? { ...r, threshold: Number(newThreshold) } : r);
     setLocalRules(updated);
-    // Debounce this in a prod app, but for MVP it's OK to save on blur
+    mockApi.updateRules(updated);
+  };
+
+  const handleWebhookChange = (id, newUrl) => {
+    const updated = localRules.map(r => r.id === id ? { ...r, webhookUrl: newUrl } : r);
+    setLocalRules(updated);
     mockApi.updateRules(updated);
   };
 
@@ -57,7 +62,7 @@ export const AlertConfigurationPanel = ({ rules }) => {
                </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mb-4">
                 <span className="text-sm">Trigger when drop-off exceeds:</span>
                 <input 
                   type="number" 
@@ -68,6 +73,19 @@ export const AlertConfigurationPanel = ({ rules }) => {
                   onBlur={(e) => handleThresholdChange(rule.id, e.target.value)}
                 />
                 <span className="text-sm">%</span>
+            </div>
+
+            <div className="flex items-center gap-4">
+                <span className="text-sm">Webhook URL (Slack/Discord):</span>
+                <input 
+                  type="url" 
+                  className="glass-input" 
+                  style={{ flex: 1, padding: '4px 8px' }}
+                  placeholder="https://hooks.slack.com/services/..."
+                  value={rule.webhookUrl || ''}
+                  onChange={(e) => setLocalRules(localRules.map(r => r.id === rule.id ? { ...r, webhookUrl: e.target.value } : r))}
+                  onBlur={(e) => handleWebhookChange(rule.id, e.target.value)}
+                />
             </div>
           </div>
         ))}

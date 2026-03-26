@@ -5,8 +5,7 @@ export const FunnelChart = ({ metrics }) => {
   const data = Object.keys(metrics).map(key => ({
     name: metrics[key].name,
     entered: metrics[key].entered,
-    completed: metrics[key].completed,
-    dropRate: ((metrics[key].dropped / metrics[key].entered) * 100).toFixed(1)
+    dropRate: metrics[key].entered > 0 ? ((metrics[key].dropped / metrics[key].entered) * 100).toFixed(1) : 0
   }));
 
   return (

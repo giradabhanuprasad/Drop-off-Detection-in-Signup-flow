@@ -4,6 +4,7 @@ export const Sidebar = ({ activeNav, setActiveNav }) => {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: '⚏' }, // Using unicode for icons to avoid extra deps
     { id: 'funnels', label: 'Funnels', icon: '☍' },
+    { id: 'ab_testing', label: 'A/B Testing', icon: '⚖️' },
     { id: 'drop_analysis', label: 'Drop Analysis', icon: '📉' },
     { id: 'alerts', label: 'Alerts', icon: '🔔' },
   ];
@@ -74,19 +75,23 @@ export const Sidebar = ({ activeNav, setActiveNav }) => {
 
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Settings */}
-        <button style={{
-             background: 'transparent',
-             color: 'var(--text-secondary)',
+        <button 
+          onClick={() => setActiveNav('settings')}
+          style={{
+             background: activeNav === 'settings' ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+             color: activeNav === 'settings' ? 'var(--text-primary)' : 'var(--text-secondary)',
              display: 'flex',
              alignItems: 'center',
              gap: 12,
              padding: '10px 16px',
              border: 'none',
+             borderRadius: '8px',
              cursor: 'pointer',
              fontSize: 14,
-             fontWeight: 500
+             fontWeight: activeNav === 'settings' ? 600 : 500,
+             transition: 'all 0.15s ease'
         }}>
-           <span>⚙️</span> Settings
+           <span style={{ fontSize: 16 }}>⚙️</span> Settings
         </button>
 
         {/* Profile */}
